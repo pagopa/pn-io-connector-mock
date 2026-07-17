@@ -34,62 +34,19 @@ Parameters:
 
 Resources:
 
-  # ── SSM parameters ───────────────────────────────────────────────────────────
-
-  MapIoConnectorMockSequence:
-    Type: AWS::SSM::Parameter
+  PnIoConnectorMockLogGroup:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
     Properties:
-      Name: MapIoConnectorMockSequence
-      Type: String
-      Description: 'Array JSON delle sequence temporizzate del mock IO.'
-      Value: |-
-        [
-          { "sequenceName": "OK_READ_THEN_PAID",
-            "steps": [
-              { "afterSeconds": 0,  "status": "ACCEPTED" },
-              { "afterSeconds": 30, "status": "PROCESSED", "readStatus": "UNREAD", "paymentStatus": "NOT_PAID" },
-              { "afterSeconds": 60, "status": "PROCESSED", "readStatus": "READ", "paymentStatus": "NOT_PAID" },
-              { "afterSeconds": 90, "status": "PROCESSED", "readStatus": "READ", "paymentStatus": "PAID" }
-            ] },
-          { "sequenceName": "OK_READ",
-            "steps": [
-              { "afterSeconds": 0,  "status": "ACCEPTED" },
-              { "afterSeconds": 0,  "status": "PROCESSED" },
-              { "afterSeconds": 60, "readStatus": "READ" }
-            ] },
-          { "sequenceName": "FAILED",
-            "steps": [
-              { "afterSeconds": 0,  "status": "ACCEPTED" },
-              { "afterSeconds": 20, "status": "FAILED" }
-            ] }
-        ]
-
-  MapIoConnectorMockSenderNotAllowed:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: MapIoConnectorMockSenderNotAllowed
-      Type: String
-      Description: 'Array JSON di fiscal_code per cui il mock ritorna sender_allowed=false.'
-      Value: '[]'
-
-  MapIoConnectorMockRoutingTaxIds:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: MapIoConnectorMockRoutingTaxIds
-      Type: String
-      Description: 'Array JSON di fiscal_code per cui la Lambda instrada verso il mock.'
-      Value: '[]'
+      TemplateURL: !Sub "${TemplateBucketBaseUrl}/fragments/log-group.yaml"
+      Parameters:
+        LogGroupName: !Sub '${ProjectName}-io-connector-mock'
+        LogGroupRetention: !Ref LogRetention
+        LogsKinesisSourceStreamArn: !Ref LogsKinesisSourceStreamArn
 
 Outputs:
 
-  MapIoConnectorMockSequenceName:
-    Value: !Ref MapIoConnectorMockSequence
-    Description: 'Nome del parametro SSM delle sequence del mock.'
-
-  MapIoConnectorMockSenderNotAllowedName:
-    Value: !Ref MapIoConnectorMockSenderNotAllowed
-    Description: 'Nome del parametro SSM della deny-list del mock.'
-
-  MapIoConnectorMockRoutingTaxIdsName:
-    Value: !Ref MapIoConnectorMockRoutingTaxIds
-    Description: 'Nome del parametro SSM del routing-set (consumato dalla Lambda).'
+  EcsLogGroup:
+    Value: !GetAtt PnIoConnectorMockLogGroup.Outputs.LogGroupName
+    Description: 'pn-io-connector-mock ECS log group name'

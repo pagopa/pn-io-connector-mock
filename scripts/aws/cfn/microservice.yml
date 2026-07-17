@@ -218,9 +218,3 @@ Resources:
               - ssm:GetParameter
               - ssm:GetParameters
             Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/MapIoConnectorMock*'
-
-Outputs:
-  MockManagedPolicyArn:
-    Condition: DeployMock
-    Value: !Ref PnIoConnectorMockManagedPolicy
-    Description: 'ARN of the SSM-only managed policy of the mock task role.'
