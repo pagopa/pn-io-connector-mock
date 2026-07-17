@@ -171,7 +171,6 @@ Resources:
         CpuValue: !Ref CpuValue
         CpuArchitecture: ARM
         MemoryAmount: !Ref MemoryAmount
-        HealthCheckPath: '/api/v1/actuator/health'
         HealthCheckTimeout: !Ref HealthCheckTimeout
         HealthCheckInterval: !Ref HealthCheckInterval
         HealthyThresholdCount: !Ref HealthyThresholdCount
