@@ -1,34 +1,52 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Some storage with input and output
+Description: Storage resources for pn-io-connector-mock
 
 Parameters:
   ProjectName:
     Type: String
     Description: Nome dell'ambiente destinazione
 
-  # Unused but required by CD pipeline
+  # Unused but required by the CD pipeline contract
   MicroserviceNumber:
     Type: Number
     Description: An unique number that identify the microservice inside the ECS cluster.
 
-  # Unused but required by CD pipeline
+  # Unused but required by the CD pipeline contract
   TemplateBucketBaseUrl:
     Type: String
-    Description: URL da cui caricare i frammenti di template di infrastruttura
-  
+    Description: URL da cui caricare i frammenti di template di infrastruttura.
+
   Version:
     Type: String
     Description: 'keep track of used projects commitIds'
-  
-  CdcKinesisSourceStreamArn:
+
+  AlarmSNSTopicName:
     Type: String
-    Description: 'Where to send CDC'
+    Description: 'Topic alarm'
+
+  LogsKinesisSourceStreamArn:
+    Type: String
+    Description: 'Where to send Logs'
+
+  LogRetention:
+    Type: Number
+    Default: 14
 
 Resources:
-    NullResource:
-        Type: AWS::CloudFormation::WaitConditionHandle
+
+  PnIoConnectorMockLogGroup:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      TemplateURL: !Sub "${TemplateBucketBaseUrl}/fragments/log-group.yaml"
+      Parameters:
+        LogGroupName: !Sub '${ProjectName}-io-connector-mock'
+        LogGroupRetention: !Ref LogRetention
+        LogsKinesisSourceStreamArn: !Ref LogsKinesisSourceStreamArn
 
 Outputs:
-    SampleOutput:
-      Description: A Sample Output
-      Value: 'na'
+
+  EcsLogGroup:
+    Value: !GetAtt PnIoConnectorMockLogGroup.Outputs.LogGroupName
+    Description: 'pn-io-connector-mock ECS log group name'
