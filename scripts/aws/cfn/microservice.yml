@@ -357,6 +357,5 @@ Outputs:
 
   RouterInvokeUrl:
     Description: >-
-      URL da configurare in io-connector (WI7, PN_IO_CONNECTOR_IO_BASE_URL/api/v1).
-      Con AuthType NONE (default) invocabile senza firma; con AWS_IAM richieste firmate SigV4 (§3.3).
+      URL da configurare in io-connector per invocare la lambda-router (corrisponde al path /io-connector-mock/*)
     Value: !GetAtt RouterFunctionUrl.FunctionUrl
