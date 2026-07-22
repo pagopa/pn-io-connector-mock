@@ -161,6 +161,60 @@ Parameters:
     Default: 'PnIoConnectorMockManagedPolicyName'
     Description: 'Name of the managed policy associated to the mock task role.'
 
+  # -- Lambda router
+  MicroserviceBucketName:
+    Type: String
+    Default: ''
+    Description: 'Bucket S3 dove la pipeline copia gli artefatti del microservizio (function zip)'
+
+  MicroserviceBucketBaseKey:
+    Type: String
+    Default: ''
+    Description: 'Base key del microservizio nel bucket S3'
+
+  RouterLambdaTimeout:
+    Type: Number
+    Default: 30
+    Description: 'Timeout (s) della lambda-router; deve restare > ForwardTimeoutMs'
+
+  IoRealBaseUrl:
+    Type: String
+    Default: 'https://api.io.pagopa.it/api/v1'
+    Description: 'Base path corsia reale IO'
+
+  RealTaxIdsWhitelistParameterName:
+    Type: String
+    Default: 'MapIoConnectorMockRealTaxIdsWhitelist'
+    Description: 'SSM param con la whitelist dei CF instradati verso IO reale (gli altri -> mock)'
+
+  RoutingCacheTtlMs:
+    Type: Number
+    Default: 300000
+    Description: 'TTL cache routing-set in ms (DR3, default PT5M)'
+
+  ForwardTimeoutMs:
+    Type: Number
+    Default: 10000
+    Description: 'Timeout (ms) richiesta in uscita; deve restare < LambdaTimeout (fault tolerance, §3.6)'
+
+  PathPrefix:
+    Type: String
+    Default: '/api/v1'
+    Description: 'Prefisso di esposizione rimosso dal rawPath (WI6/WI7); stringa vuota per disabilitare'
+
+  FunctionUrlAuthType:
+    Type: String
+    Default: 'NONE'
+    AllowedValues:
+      - AWS_IAM
+      - NONE
+    Description: >-
+      Auth della Function URL
+  InvokerPrincipal:
+    Type: String
+    Default: '*'
+    Description: 'Principal della resource-based policy della Function URL (con AWS_IAM restringere allARN di io-connector)'
+
 Resources:
   PnIoConnectorMockMicroservice:
     Type: AWS::CloudFormation::Stack
@@ -217,3 +271,92 @@ Resources:
               - ssm:GetParameter
               - ssm:GetParameters
             Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/MapIoConnectorMock*'
+
+  RouterLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for pn-io-connector-mock lambda-router'
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'Egress verso ALB interno del mock e verso IO reale'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-io-connector-mock-router-sg'
+
+  RouterLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-io-connector-mock-router'
+      RetentionInDays: 14
+
+  RouterLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-io-connector-mock-router-role'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - !Ref PnIoConnectorMockManagedPolicy
+
+  RouterLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: RouterLambdaLogGroup
+    Properties:
+      FunctionName: !Sub '${ProjectName}-io-connector-mock-router'
+      Description: 'Router a due corsie mock/IO reale per i test QA di pn-io-connector'
+      Runtime: nodejs24.x
+      Handler: index.handler
+      MemorySize: 256
+      Timeout: !Ref RouterLambdaTimeout
+      Role: !GetAtt RouterLambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref MicroserviceBucketName
+        S3Key: !Sub '${MicroserviceBucketBaseKey}/functions_zip/lambda-router.zip'
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref RouterLambdaSecurityGroup
+        SubnetIds: !Split [ ',', !Ref VpcEgressSubnetsIds ]
+      Environment:
+        Variables:
+          IO_REAL_BASE_URL: !Ref IoRealBaseUrl
+          MOCK_BASE_URL: !Sub 'http://${ApplicationLoadBalancerDomain}/io-connector-mock'
+          PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME: !Ref RealTaxIdsWhitelistParameterName
+          ROUTING_CACHE_TTL_MS: !Ref RoutingCacheTtlMs
+          FORWARD_TIMEOUT_MS: !Ref ForwardTimeoutMs
+          PATH_PREFIX: !Ref PathPrefix
+
+  RouterFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref RouterLambda
+      AuthType: !Ref FunctionUrlAuthType
+
+  RouterFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RouterLambda
+      Action: lambda:InvokeFunctionUrl
+      Principal: !Ref InvokerPrincipal
+      FunctionUrlAuthType: !Ref FunctionUrlAuthType
+
+Outputs:
+
+  RouterFunctionArn:
+    Value: !GetAtt RouterLambda.Arn
+    Description: 'ARN della lambda-router'
+
+  RouterInvokeUrl:
+    Description: >-
+      URL da configurare in io-connector (WI7, PN_IO_CONNECTOR_IO_BASE_URL/api/v1).
+      Con AuthType NONE (default) invocabile senza firma; con AWS_IAM richieste firmate SigV4 (§3.3).
+    Value: !GetAtt RouterFunctionUrl.FunctionUrl
