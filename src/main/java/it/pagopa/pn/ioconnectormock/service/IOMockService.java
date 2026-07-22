@@ -1,9 +1,12 @@
 package it.pagopa.pn.ioconnectormock.service;
 
 import it.pagopa.pn.ioconnectormock.exception.MarkerNotFoundException;
+import it.pagopa.pn.ioconnectormock.exception.MessageNotFoundException;
+import it.pagopa.pn.ioconnectormock.exception.SequenceUnknownException;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.ExternalMessageResponseWithContent;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.MessageDetail;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.NewMessage;
+import it.pagopa.pn.ioconnectormock.middleware.ssm.SequenceProvider;
 import it.pagopa.pn.ioconnectormock.model.Sequence;
 import it.pagopa.pn.ioconnectormock.model.StateSnapshot;
 import lombok.CustomLog;
@@ -22,11 +25,12 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class IOMockService {
 
+    private final SequenceEngine sequenceEngine;
+    private final SequenceProvider sequenceProvider;
+
     private static final String MDC_IO_MESSAGE_ID = "ioMessageId";
 
     private static final Pattern MARKER = Pattern.compile("@io:([A-Za-z0-9_]+)");
-
-    private final SequenceEngine sequenceEngine;
 
     public boolean evaluateProfile(String fiscalCode) {
         boolean senderAllowed = true;
@@ -43,7 +47,8 @@ public class IOMockService {
         String sequenceName = extractMarker(subject)
                 .orElseThrow(() -> new MarkerNotFoundException("Marker @io:<sequenceName> not found in subject"));
 
-        // TODO: Recupero sequence da parameter store / cache
+        sequenceProvider.getSequence(sequenceName)
+                .orElseThrow(() -> new SequenceUnknownException("Unknown sequence '" + sequenceName + "'"));
         log.info("sequence_resolved sequenceName={}", sequenceName);
 
         // TODO sostituire con IoMessageIdCodec.encode
@@ -64,8 +69,9 @@ public class IOMockService {
             // TODO sostituire con IoMessageIdCodec.decode
             DecodedId decoded = new DecodedId("OK_READ_THEN_PAID", Instant.now().toEpochMilli());
 
-            // TODO: Recupero sequence da parameter store / cache
-            Sequence sequence = null;
+            Sequence sequence = sequenceProvider.getSequence(decoded.sequenceName())
+                    .orElseThrow(() -> new MessageNotFoundException(
+                            "Sequence '" + decoded.sequenceName() + "' not found in registry"));
 
             long elapsedSeconds = Math.floorDiv(Instant.now().toEpochMilli() - decoded.submitEpochMillis(), 1000L);
             StateSnapshot snapshot = getStatusSnapshot(sequence, elapsedSeconds);

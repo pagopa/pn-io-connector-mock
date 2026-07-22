@@ -21,7 +21,7 @@ MOCK_SEQUENCE_PARAMETER_VALUE='[
   { "sequenceName": "OK_READ",
     "steps": [
       { "afterSeconds": 0,  "status": "ACCEPTED" },
-      { "afterSeconds": 0,  "status": "PROCESSED" },
+      { "afterSeconds": 30, "status": "PROCESSED" },
       { "afterSeconds": 60, "readStatus": "READ" }
     ] },
   { "sequenceName": "FAILED",
