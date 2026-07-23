@@ -20,6 +20,11 @@ describe('responseBuilder', () => {
       expect(out.isBase64Encoded).to.equal(true);
     });
 
+    it('passes through the upstream statusDescription (ALB), or derives it from the code', () => {
+      expect(passthrough({ statusCode: 201, statusDescription: '201 Created' }).statusDescription).to.equal('201 Created');
+      expect(passthrough({ statusCode: 200 }).statusDescription).to.equal('200');
+    });
+
     it('strips hop-by-hop response headers (case-insensitive)', () => {
       const out = passthrough({
         statusCode: 200,
@@ -44,6 +49,7 @@ describe('responseBuilder', () => {
       const out = error(502, 'Bad Gateway', 'upstream down');
       expect(out.statusCode).to.equal(502);
       expect(out.headers['Content-Type']).to.equal('application/problem+json');
+      expect(out.statusDescription).to.equal('502 Bad Gateway');
       expect(out.isBase64Encoded).to.equal(false);
       expect(JSON.parse(out.body)).to.deep.equal({ status: 502, title: 'Bad Gateway', detail: 'upstream down' });
     });

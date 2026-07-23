@@ -6,7 +6,7 @@ const proxyquire = require('proxyquire').noCallThru();
 process.env.MOCK_BASE_URL = 'http://mock.internal:8080/io-connector-mock';
 process.env.IO_REAL_BASE_URL = 'https://api.io.pagopa.it/api/v1';
 
-function makeHttpMock({ statusCode = 200, headers = {}, body = '', onError = null, onTimeout = false, capture = {} }) {
+function makeHttpMock({ statusCode = 200, statusMessage = undefined, headers = {}, body = '', onError = null, onTimeout = false, capture = {} }) {
   return {
     request: (options, callback) => {
       capture.options = options;
@@ -24,6 +24,7 @@ function makeHttpMock({ statusCode = 200, headers = {}, body = '', onError = nul
           }
           const res = {
             statusCode,
+            statusMessage,
             headers,
             on: (event, handler) => {
               if (event === 'data' && body) handler(Buffer.from(body));
@@ -112,6 +113,16 @@ describe('forwarder', () => {
       'MOCK'
     );
     expect(capture.body).to.equal('{"a":1}');
+  });
+
+  it('builds statusDescription from the upstream reason phrase (fallback to the code)', async () => {
+    const withMsg = makeForwarder(makeHttpMock({ statusCode: 201, statusMessage: 'Created' }));
+    const r1 = await withMsg.forward({ method: 'GET', path: '/messages', headers: {}, query: null, rawBody: null }, 'MOCK');
+    expect(r1.statusDescription).to.equal('201 Created');
+
+    const noMsg = makeForwarder(makeHttpMock({ statusCode: 200 }));
+    const r2 = await noMsg.forward({ method: 'GET', path: '/messages', headers: {}, query: null, rawBody: null }, 'MOCK');
+    expect(r2.statusDescription).to.equal('200');
   });
 
   it('sets the outbound request timeout (default 10s)', async () => {

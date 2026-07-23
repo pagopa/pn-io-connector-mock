@@ -7,7 +7,7 @@ const STRIP_RESPONSE_HEADERS = new Set([
   'content-length'
 ]);
 
-function passthrough({ statusCode, headers, body, isBase64Encoded }) {
+function passthrough({ statusCode, statusDescription, headers, body, isBase64Encoded }) {
   const outHeaders = {};
   for (const [k, v] of Object.entries(headers || {})) {
     if (!STRIP_RESPONSE_HEADERS.has(k.toLowerCase())) {
@@ -16,6 +16,7 @@ function passthrough({ statusCode, headers, body, isBase64Encoded }) {
   }
   return {
     statusCode,
+    statusDescription: statusDescription || String(statusCode),
     headers: outHeaders,
     body: body || '',
     isBase64Encoded: Boolean(isBase64Encoded)
@@ -25,6 +26,7 @@ function passthrough({ statusCode, headers, body, isBase64Encoded }) {
 function error(statusCode, title, detail) {
   return {
     statusCode,
+    statusDescription: `${statusCode} ${title}`,
     headers: { 'Content-Type': 'application/problem+json' },
     body: JSON.stringify({ status: statusCode, title, detail }),
     isBase64Encoded: false

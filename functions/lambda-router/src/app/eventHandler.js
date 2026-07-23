@@ -9,7 +9,9 @@ const logSanitizer = require('./lib/logSanitizer');
 
 exports.handleEvent = async function (event) {
 
-  const requestId = event && event.requestContext && event.requestContext.requestId;
+  const ctx = (event && event.requestContext) || {};
+  const evtHeaders = (event && event.headers) || {};
+  const requestId = ctx.requestId || evtHeaders['x-amzn-trace-id'];
   console.log(JSON.stringify(logSanitizer.requestSummary(event)));
 
   let req;

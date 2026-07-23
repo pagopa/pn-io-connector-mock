@@ -142,4 +142,56 @@ describe('eventAdapter', () => {
   it('throws when the event is not an object', () => {
     expect(() => toRequest(null)).to.throw();
   });
+
+  describe('ALB target event', () => {
+    function albEvent(overrides) {
+      return Object.assign({
+        requestContext: { elb: { targetGroupArn: 'arn:aws:elasticloadbalancing:eu-south-1:1:targetgroup/x/abc' } },
+        httpMethod: 'POST',
+        path: '/api/v1/messages',
+        queryStringParameters: {},
+        headers: { 'content-type': 'application/json' },
+        body: '{"a":1}',
+        isBase64Encoded: false
+      }, overrides);
+    }
+
+    it('maps an ALB event to the canonical Request and strips /api/v1', () => {
+      const req = toRequest(albEvent({ queryStringParameters: { foo: 'bar' } }));
+      expect(req.method).to.equal('POST');
+      expect(req.path).to.equal('/messages');
+      expect(req.headers['content-type']).to.equal('application/json');
+      expect(req.query).to.deep.equal({ foo: 'bar' });
+      expect(req.rawBody).to.equal('{"a":1}');
+    });
+
+    it('maps an ALB getMessage path preserving the id', () => {
+      const req = toRequest(albEvent({
+        httpMethod: 'GET',
+        path: '/api/v1/messages/RSSMRA80A01H501T/MOCK-OK_READ-1750579200000-a1b2c3',
+        body: null
+      }));
+      expect(req.path).to.equal('/messages/RSSMRA80A01H501T/MOCK-OK_READ-1750579200000-a1b2c3');
+      expect(req.rawBody).to.equal(null);
+    });
+
+    it('decodes a base64 body in an ALB event', () => {
+      const req = toRequest(albEvent({
+        body: Buffer.from('{"fiscal_code":"RSSMRA80A01H501T"}').toString('base64'),
+        isBase64Encoded: true
+      }));
+      expect(req.rawBody).to.equal('{"fiscal_code":"RSSMRA80A01H501T"}');
+      expect(req.isBase64Encoded).to.equal(true);
+    });
+
+    it('falls back to "/" and null query when path/query are absent', () => {
+      const req = toRequest({ requestContext: { elb: {} }, httpMethod: 'GET' });
+      expect(req.path).to.equal('/');
+      expect(req.query).to.equal(null);
+    });
+
+    it('throws when httpMethod is missing', () => {
+      expect(() => toRequest({ requestContext: { elb: {} }, path: '/api/v1/messages' })).to.throw(/httpMethod/);
+    });
+  });
 });

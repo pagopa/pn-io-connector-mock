@@ -61,6 +61,7 @@ async function forward(req, lane) {
         const buffer = Buffer.concat(chunks);
         resolve({
           statusCode: res.statusCode,
+          statusDescription: res.statusMessage ? `${res.statusCode} ${res.statusMessage}` : String(res.statusCode),
           headers: res.headers,
           body: buffer.toString('base64'),
           isBase64Encoded: true

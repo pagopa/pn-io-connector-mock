@@ -150,5 +150,29 @@ describe('eventHandler', () => {
       const decisionLine = logged.map((l) => JSON.parse(l)).find((o) => o.msg === 'routing decision');
       expect(decisionLine.ioMessageId).to.equal('MOCK-OK_READ-1750579200000-a1b2c3');
     });
+
+    it('handles an ALB target event: strips /api/v1, routes to MOCK, uses trace id as requestId', async () => {
+      const capture = {};
+      const handler = makeRealHandler(capture);
+      const logged = [];
+      const original = console.log;
+      console.log = (...args) => logged.push(args.join(' '));
+      try {
+        await handler.handleEvent({
+          requestContext: { elb: { targetGroupArn: 'arn:aws:elasticloadbalancing:eu-south-1:1:targetgroup/x/abc' } },
+          httpMethod: 'POST',
+          path: '/api/v1/messages',
+          headers: { 'content-type': 'application/json', 'x-amzn-trace-id': 'Root=1-abc' },
+          body: JSON.stringify({ fiscal_code: 'MRORSS80A01H501K', content: { subject: 'Avviso @io:OK_READ_THEN_PAID' } }),
+          isBase64Encoded: false
+        });
+      } finally {
+        console.log = original;
+      }
+      expect(capture.req.path).to.equal('/messages');
+      expect(capture.lane).to.equal('MOCK');
+      const decisionLine = logged.map((l) => JSON.parse(l)).find((o) => o.msg === 'routing decision');
+      expect(decisionLine.requestId).to.equal('Root=1-abc');
+    });
   });
 });

@@ -15,42 +15,60 @@ function stripPrefix(path) {
   return path;
 }
 
-function toRequest(event) {
-  if (!event || typeof event !== 'object') {
-    throw new Error('Invalid event: not an object');
+function decodeBody(event) {
+  if (event.body == null) {
+    return null;
   }
+  return event.isBase64Encoded
+    ? Buffer.from(event.body, 'base64').toString('utf8')
+    : event.body;
+}
 
+function fromAlb(event) {
+  const method = event.httpMethod;
+  if (!method) {
+    throw new Error('Invalid ALB event: missing httpMethod');
+  }
+  return {
+    method,
+    path: stripPrefix(event.path || '/'),
+    pathParameters: {},
+    headers: Object.assign({}, event.headers),
+    query: event.queryStringParameters || null,
+    rawBody: decodeBody(event),
+    isBase64Encoded: Boolean(event.isBase64Encoded)
+  };
+}
+
+function fromFunctionUrl(event) {
   const http = (event.requestContext && event.requestContext.http) || {};
   const method = http.method;
   if (!method) {
     throw new Error('Invalid event: missing requestContext.http.method');
   }
 
-  const path = stripPrefix(event.rawPath || http.path || '/');
-
-  const query = event.queryStringParameters || null;
-
   const headers = Object.assign({}, event.headers);
   if (Array.isArray(event.cookies) && event.cookies.length && headers.cookie == null && headers.Cookie == null) {
     headers.cookie = event.cookies.join('; ');
   }
 
-  let rawBody = null;
-  if (event.body != null) {
-    rawBody = event.isBase64Encoded
-      ? Buffer.from(event.body, 'base64').toString('utf8')
-      : event.body;
-  }
-
   return {
     method,
-    path,
+    path: stripPrefix(event.rawPath || http.path || '/'),
     pathParameters: {},
     headers,
-    query,
-    rawBody,
+    query: event.queryStringParameters || null,
+    rawBody: decodeBody(event),
     isBase64Encoded: Boolean(event.isBase64Encoded)
   };
+}
+
+function toRequest(event) {
+  if (!event || typeof event !== 'object') {
+    throw new Error('Invalid event: not an object');
+  }
+  const ctx = event.requestContext || {};
+  return ctx.elb ? fromAlb(event) : fromFunctionUrl(event);
 }
 
 module.exports = { toRequest };

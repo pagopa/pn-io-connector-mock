@@ -21,7 +21,7 @@ Vedi l'analisi completa in `../../docs/analisi/` (WI6) e le convenzioni di stile
 ```
 index.js                     entry point (exports.handler)
 src/app/eventHandler.js       orchestrazione: adapter -> router -> forwarder
-src/app/lib/eventAdapter.js   evento Function URL (payload v2) -> Request canonica
+src/app/lib/eventAdapter.js   evento ALB target / Function URL v2 -> Request canonica
 src/app/lib/router.js         regole di routing -> RouteDecision           (doppia corsia)
 src/app/lib/routingSetClient.js  whitelist CF (->reale) da SSM + cache TTL (DR3)
 src/app/lib/ssmClient.js      client SSM (init condizionale LocalStack)
@@ -41,12 +41,17 @@ npm run local-dev # invocazione locale (richiede SSM/LocalStack + mock in ascolt
 
 ## Deploy (CloudFormation)
 
-Le risorse AWS della Lambda (Function, Function URL, ruolo IAM, SG, log group) sono definite
-**dentro** `scripts/aws/cfn/microservice.yml`, insieme al microservizio ECS — stesso pattern di
-`downloadAttachments` in `pn-io-connector`. Così vengono deployate dalla pipeline standard,
-riusano i parametri VPC passati al microservizio e la managed policy SSM già definita. Non
-esiste più un template standalone. `MOCK_BASE_URL` è derivato dall'ALB interno dove gira il
-microservizio (`http://<ALB>/io-connector-mock`).
+Le risorse AWS della Lambda (Function, ruolo IAM, SG, log group) sono definite **dentro**
+`scripts/aws/cfn/microservice.yml`, insieme al microservizio ECS. Vengono deployate dalla
+pipeline standard, riusano i parametri VPC passati al microservizio e la managed policy SSM
+già definita. Non esiste un template standalone.
+
+**Esposizione**: la lambda è un **target dell'ALB interno** (`TargetGroup` di tipo `lambda` +
+`ListenerRule` su `/api/v1/*`, invocazione da `elasticloadbalancing.amazonaws.com`), stesso
+pattern di `pn-lambda-reverse-proxy` in `pn-infra`. **Nessuna Function URL, nessuna auth lato
+chiamante**: io-connector la chiama in-VPC su `http://<ALB>:8080/api/v1` (output
+`RouterInvokeBaseUrl`). `MOCK_BASE_URL` è derivato dallo stesso ALB
+(`http://<ALB>:8080/io-connector-mock`).
 
 Il codice segue la convenzione pipeline PN: `functions/lambda-router/` viene impacchettato in
 `<base>/functions_zip/lambda-router.zip` e referenziato via i parametri `MicroserviceBucketName`
@@ -58,7 +63,7 @@ richiede parametri della Lambda: usano tutti i default del template.
 | Env var | Default | Nota |
 |---|---|---|
 | `IO_REAL_BASE_URL` | `https://api.io.pagopa.it/api/v1` | corsia reale |
-| `MOCK_BASE_URL` | `http://localhost:8080/io-connector-mock` | corsia mock — **DR4** |
+| `MOCK_BASE_URL` | `http://localhost:8080/io-connector-mock` | corsia mock (in cloud: `http://<ALB>:8080/io-connector-mock`) |
 | `PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME` | `MapIoConnectorMockRealTaxIdsWhitelist` | whitelist CF verso IO reale (SSM) |
 | `ROUTING_CACHE_TTL_MS` | `300000` | TTL cache routing-set — **DR3** |
 | `FORWARD_TIMEOUT_MS` | `10000` | timeout richiesta in uscita; alla scadenza → 504 (§3.6) |

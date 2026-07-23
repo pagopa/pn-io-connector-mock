@@ -75,6 +75,24 @@ describe('logSanitizer', () => {
       expect(summary.rawPath).to.equal('/api/v1/messages/RSSMRA********1U/MOCK-OK_READ-1750579200000-a1b2c3');
     });
 
+    it('summarizes an ALB event (httpMethod / path / trace id)', () => {
+      const summary = requestSummary({
+        requestContext: { elb: {} },
+        httpMethod: 'POST',
+        path: '/api/v1/messages',
+        headers: { 'x-amzn-trace-id': 'Root=1-abc', 'ocp-apim-subscription-key': 'secret' }
+      });
+      expect(summary.method).to.equal('POST');
+      expect(summary.rawPath).to.equal('/api/v1/messages');
+      expect(summary.requestId).to.equal('Root=1-abc');
+      expect(summary.headers['ocp-apim-subscription-key']).to.equal('***');
+    });
+
+    it('yields undefined rawPath when neither rawPath nor path is present', () => {
+      const summary = requestSummary({ headers: {} });
+      expect(summary.rawPath).to.equal(undefined);
+    });
+
     it('tolerates a missing requestContext / http', () => {
       const summary = requestSummary({ rawPath: '/api/v1/profiles' });
       expect(summary.method).to.equal(undefined);

@@ -202,18 +202,12 @@ Parameters:
     Default: '/api/v1'
     Description: 'Prefisso di esposizione rimosso dal rawPath (WI6/WI7); stringa vuota per disabilitare'
 
-  FunctionUrlAuthType:
-    Type: String
-    Default: 'AWS_IAM'
-    AllowedValues:
-      - AWS_IAM
-      - NONE
+  RouterRulePriority:
+    Type: Number
+    Default: 100
     Description: >-
-      Auth della Function URL.
-  InvokerPrincipal:
-    Type: String
-    Default: '*'
-    Description: 'Principal della resource-based policy della Function URL (con AWS_IAM restringere allARN di io-connector)'
+      Priorita' della listener rule dell'ALB interno che instrada /api/v1/* alla lambda-router.
+      Deve essere un valore libero, diverso da quello usato dalla regola del microservizio ECS.
 
 Resources:
   PnIoConnectorMockMicroservice:
@@ -275,6 +269,7 @@ Resources:
   RouterLambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub '${ProjectName}-io-connector-mock-router-sg'
       GroupDescription: 'Security group for pn-io-connector-mock lambda-router'
       VpcId: !Ref VpcId
       SecurityGroupEgress:
@@ -282,7 +277,7 @@ Resources:
           CidrIp: 0.0.0.0/0
           Description: 'Egress verso ALB interno del mock e verso IO reale'
       Tags:
-        - Key: NameA
+        - Key: Name
           Value: !Sub '${ProjectName}-io-connector-mock-router-sg'
 
   RouterLambdaLogGroup:
@@ -306,6 +301,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSXRayDaemonWriteAccess
         - !Ref PnIoConnectorMockManagedPolicy
 
   RouterLambda:
@@ -318,6 +314,8 @@ Resources:
       Handler: index.handler
       MemorySize: 256
       Timeout: !Ref RouterLambdaTimeout
+      TracingConfig:
+        Mode: Active
       Role: !GetAtt RouterLambdaExecutionRole.Arn
       Code:
         S3Bucket: !Ref MicroserviceBucketName
@@ -334,20 +332,43 @@ Resources:
           ROUTING_CACHE_TTL_MS: !Ref RoutingCacheTtlMs
           FORWARD_TIMEOUT_MS: !Ref ForwardTimeoutMs
           PATH_PREFIX: !Ref PathPrefix
+      Tags:
+        - Key: pn-eni-related
+          Value: 'true'
+        - Key: pn-eni-related-groupName-regexp
+          Value:
+            Fn::Base64: !Sub '^${ProjectName}-io-connector-mock-router-sg.*$'
 
-  RouterFunctionUrl:
-    Type: AWS::Lambda::Url
+  RouterTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      TargetFunctionArn: !Ref RouterLambda
-      AuthType: !Ref FunctionUrlAuthType
+      Name: !Sub '${ProjectName}-io-conn-mock-router-tg'
+      TargetType: lambda
+      HealthCheckEnabled: false
+      Targets:
+        - Id: !GetAtt RouterLambda.Arn
+    DependsOn: RouterAlbInvokePermission
 
-  RouterFunctionUrlPermission:
+  RouterAlbInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref RouterLambda
-      Action: lambda:InvokeFunctionUrl
-      Principal: !Ref InvokerPrincipal
-      FunctionUrlAuthType: !Ref FunctionUrlAuthType
+      Action: lambda:InvokeFunction
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  RouterListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ApplicationLoadBalancerListenerArn
+      Priority: !Ref RouterRulePriority
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '/api/v1/*'
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref RouterTargetGroup
 
 Outputs:
 
@@ -355,7 +376,8 @@ Outputs:
     Value: !GetAtt RouterLambda.Arn
     Description: 'ARN della lambda-router'
 
-  RouterInvokeUrl:
+  RouterInvokeBaseUrl:
     Description: >-
-      URL da configurare in io-connector per invocare la lambda-router (corrisponde al path /io-connector-mock/*)
-    Value: !GetAtt RouterFunctionUrl.FunctionUrl
+      Base URL da configurare in io-connector (WI7, PN_IO_CONNECTOR_IO_BASE_URL): l'ALB interno
+      sul path /api/v1. Nessuna firma richiesta (chiamata in-VPC).
+    Value: !Sub 'http://${ApplicationLoadBalancerDomain}:8080/api/v1'

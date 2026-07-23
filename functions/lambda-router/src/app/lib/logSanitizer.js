@@ -32,19 +32,16 @@ function redactHeaders(headers) {
   return out;
 }
 
-/**
- * Riassunto sicuro dell'evento in ingresso per il log: solo metodo, path grezzo, requestId
- * e header redatti. Il body NON viene loggato (contiene fiscal_code e contenuto del messaggio).
- */
 function requestSummary(event) {
   const ctx = (event && event.requestContext) || {};
   const http = ctx.http || {};
+  const headers = (event && event.headers) || {};
   return {
     msg: 'request received',
-    method: http.method,
-    rawPath: maskFiscalCodes(event && event.rawPath),
-    requestId: ctx.requestId,
-    headers: redactHeaders(event && event.headers)
+    method: http.method || (event && event.httpMethod),
+    rawPath: maskFiscalCodes((event && (event.rawPath || event.path)) || undefined),
+    requestId: ctx.requestId || headers['x-amzn-trace-id'],
+    headers: redactHeaders(headers)
   };
 }
 
