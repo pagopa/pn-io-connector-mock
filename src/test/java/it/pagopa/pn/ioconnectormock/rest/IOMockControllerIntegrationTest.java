@@ -66,7 +66,7 @@ class IOMockControllerIntegrationTest {
                         .content(json(newMessage("@io:" + SEQUENCE_NAME))))
                 .andExpect(status().isCreated())
                 .andReturn();
-        assertThat(result.getResponse().getContentAsString()).contains("ioMessageId");
+        assertThat(result.getResponse().getContentAsString()).contains("MOCK-OK_READ_THEN_PAID");
     }
 
     @Test

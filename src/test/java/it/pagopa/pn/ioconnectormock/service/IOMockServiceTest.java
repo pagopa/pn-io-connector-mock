@@ -6,6 +6,7 @@ import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.MessageConte
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.NewMessage;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.PaymentStatus;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.ReadStatus;
+import it.pagopa.pn.ioconnectormock.middleware.ssm.SenderNotAllowedProvider;
 import it.pagopa.pn.ioconnectormock.middleware.ssm.SequenceProvider;
 import it.pagopa.pn.ioconnectormock.model.Sequence;
 import it.pagopa.pn.ioconnectormock.model.SequenceStep;
@@ -33,17 +34,26 @@ class IOMockServiceTest {
             new SequenceStep(90, PROCESSED, null, PaymentStatus.PAID)));
 
     private SequenceProvider sequenceProvider;
+    private SenderNotAllowedProvider senderNotAllowedProvider;
     private IOMockService service;
 
     @BeforeEach
     void setUp() {
         sequenceProvider = mock(SequenceProvider.class);
-        service = new IOMockService(new SequenceEngine(), sequenceProvider);
+        senderNotAllowedProvider = mock(SenderNotAllowedProvider.class);
+        service = new IOMockService(new SequenceEngine(), sequenceProvider, senderNotAllowedProvider);
     }
 
     @Test
     void profileAllowedWhenNotDenied() {
+        when(senderNotAllowedProvider.isDenied("RSSMRA80A01H501U")).thenReturn(false);
         assertThat(service.evaluateProfile("RSSMRA80A01H501U")).isTrue();
+    }
+
+    @Test
+    void profileNotAllowedWhenDenied() {
+        when(senderNotAllowedProvider.isDenied("RSSMRA80A01H501U")).thenReturn(true);
+        assertThat(service.evaluateProfile("RSSMRA80A01H501U")).isFalse();
     }
 
 
