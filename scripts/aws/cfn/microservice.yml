@@ -204,12 +204,12 @@ Parameters:
 
   FunctionUrlAuthType:
     Type: String
-    Default: 'NONE'
+    Default: 'AWS_IAM'
     AllowedValues:
       - AWS_IAM
       - NONE
     Description: >-
-      Auth della Function URL
+      Auth della Function URL.
   InvokerPrincipal:
     Type: String
     Default: '*'
