@@ -301,7 +301,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
-        - arn:aws:iam::aws:policy/service-role/AWSXRayDaemonWriteAccess
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
         - !Ref PnIoConnectorMockManagedPolicy
 
   RouterLambda:
