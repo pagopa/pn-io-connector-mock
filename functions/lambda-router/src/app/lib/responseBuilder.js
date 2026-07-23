@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATUS_CODES } = require('http');
+
 const STRIP_RESPONSE_HEADERS = new Set([
   'transfer-encoding',
   'connection',
@@ -7,17 +9,26 @@ const STRIP_RESPONSE_HEADERS = new Set([
   'content-length'
 ]);
 
-function passthrough({ statusCode, statusDescription, headers, body, isBase64Encoded }) {
-  const outHeaders = {};
+function statusLine(statusCode) {
+  return `${statusCode} ${STATUS_CODES[statusCode] || 'OK'}`;
+}
+
+function sanitizeResponseHeaders(headers) {
+  const out = {};
   for (const [k, v] of Object.entries(headers || {})) {
-    if (!STRIP_RESPONSE_HEADERS.has(k.toLowerCase())) {
-      outHeaders[k] = v;
+    if (STRIP_RESPONSE_HEADERS.has(k.toLowerCase())) {
+      continue;
     }
+    out[k] = Array.isArray(v) ? v.join(', ') : v;
   }
+  return out;
+}
+
+function passthrough({ statusCode, headers, body, isBase64Encoded }) {
   return {
     statusCode,
-    statusDescription: statusDescription || String(statusCode),
-    headers: outHeaders,
+    statusDescription: statusLine(statusCode),
+    headers: sanitizeResponseHeaders(headers),
     body: body || '',
     isBase64Encoded: Boolean(isBase64Encoded)
   };
@@ -26,7 +37,7 @@ function passthrough({ statusCode, statusDescription, headers, body, isBase64Enc
 function error(statusCode, title, detail) {
   return {
     statusCode,
-    statusDescription: `${statusCode} ${title}`,
+    statusDescription: statusLine(statusCode),
     headers: { 'Content-Type': 'application/problem+json' },
     body: JSON.stringify({ status: statusCode, title, detail }),
     isBase64Encoded: false

@@ -20,9 +20,16 @@ describe('responseBuilder', () => {
       expect(out.isBase64Encoded).to.equal(true);
     });
 
-    it('passes through the upstream statusDescription (ALB), or derives it from the code', () => {
-      expect(passthrough({ statusCode: 201, statusDescription: '201 Created' }).statusDescription).to.equal('201 Created');
-      expect(passthrough({ statusCode: 200 }).statusDescription).to.equal('200');
+    it('builds a valid ALB status line "<code> <reason>" from the status code', () => {
+      expect(passthrough({ statusCode: 201 }).statusDescription).to.equal('201 Created');
+      expect(passthrough({ statusCode: 200 }).statusDescription).to.equal('200 OK');
+      expect(passthrough({ statusCode: 599 }).statusDescription).to.equal('599 OK'); // codice non standard -> fallback
+    });
+
+    it('flattens array-valued headers to strings (ALB single-value headers)', () => {
+      const out = passthrough({ statusCode: 200, headers: { 'Set-Cookie': ['a=1', 'b=2'], 'X-One': 'y' } });
+      expect(out.headers['Set-Cookie']).to.equal('a=1, b=2');
+      expect(out.headers['X-One']).to.equal('y');
     });
 
     it('strips hop-by-hop response headers (case-insensitive)', () => {
