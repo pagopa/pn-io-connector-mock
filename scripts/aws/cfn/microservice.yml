@@ -282,7 +282,7 @@ Resources:
           CidrIp: 0.0.0.0/0
           Description: 'Egress verso ALB interno del mock e verso IO reale'
       Tags:
-        - Key: Name
+        - Key: NameA
           Value: !Sub '${ProjectName}-io-connector-mock-router-sg'
 
   RouterLambdaLogGroup:
@@ -329,7 +329,7 @@ Resources:
       Environment:
         Variables:
           IO_REAL_BASE_URL: !Ref IoRealBaseUrl
-          MOCK_BASE_URL: !Sub 'http://${ApplicationLoadBalancerDomain}/io-connector-mock'
+          MOCK_BASE_URL: !Sub 'http://${ApplicationLoadBalancerDomain}:8080/io-connector-mock'
           PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME: !Ref RealTaxIdsWhitelistParameterName
           ROUTING_CACHE_TTL_MS: !Ref RoutingCacheTtlMs
           FORWARD_TIMEOUT_MS: !Ref ForwardTimeoutMs
