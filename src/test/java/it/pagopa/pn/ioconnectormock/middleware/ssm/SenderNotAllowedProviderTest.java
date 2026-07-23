@@ -32,7 +32,7 @@ class SenderNotAllowedProviderTest {
 
     @Test
     void deniesExactMatch() {
-        ssmReturns("[\"" + DENIED + "\",\"OTHERCF00A00A000A\"]");
+        ssmReturns(DENIED + ",OTHERCF00A00A000A");
         SenderNotAllowedProvider provider = provider();
 
         assertThat(provider.isDenied(DENIED)).isTrue();
@@ -41,15 +41,24 @@ class SenderNotAllowedProviderTest {
 
     @Test
     void trimsBeforeMatching() {
-        ssmReturns("[\"" + DENIED + "\"]");
+        ssmReturns(DENIED);
         SenderNotAllowedProvider provider = provider();
 
         assertThat(provider.isDenied("  " + DENIED + "  ")).isTrue();
     }
 
     @Test
+    void trimsWhitespaceAroundCommaSeparatedEntries() {
+        ssmReturns("  " + DENIED + " , OTHERCF00A00A000A ");
+        SenderNotAllowedProvider provider = provider();
+
+        assertThat(provider.isDenied(DENIED)).isTrue();
+        assertThat(provider.isDenied("OTHERCF00A00A000A")).isTrue();
+    }
+
+    @Test
     void allowsBlankOrNullFiscalCode() {
-        ssmReturns("[\"" + DENIED + "\"]");
+        ssmReturns(DENIED);
         SenderNotAllowedProvider provider = provider();
 
         assertThat(provider.isDenied(null)).isFalse();
@@ -58,15 +67,7 @@ class SenderNotAllowedProviderTest {
 
     @Test
     void emptyDenyListAllowsEveryone() {
-        ssmReturns("[]");
-        SenderNotAllowedProvider provider = provider();
-
-        assertThat(provider.isDenied(DENIED)).isFalse();
-    }
-
-    @Test
-    void malformedDenyListAllowsEveryoneWithoutCrashing() {
-        ssmReturns("not-a-json-array");
+        ssmReturns("");
         SenderNotAllowedProvider provider = provider();
 
         assertThat(provider.isDenied(DENIED)).isFalse();
