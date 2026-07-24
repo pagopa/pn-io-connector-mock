@@ -49,56 +49,69 @@ describe('router', () => {
   });
 
   describe('POST /messages', () => {
-    it('routes to MOCK when subject matches @io:<sequenceName>', async () => {
-      const router = makeRouter();
+    it('routes to MOCK when subject matches @io:<sequenceName> (marker checked first)', async () => {
+      const router = makeRouter(async () => true);
       const decision = await router.route(req({
         method: 'POST', path: '/messages',
-        rawBody: JSON.stringify({ content: { subject: 'Ciao @io:OK_READ_THEN_PAID' } })
+        rawBody: JSON.stringify({ fiscal_code: 'RSSMRA80A01H501T', content: { subject: 'Ciao @io:OK_READ_THEN_PAID' } })
       }));
       expect(decision.endpoint).to.equal('messages');
       expect(decision.lane).to.equal('MOCK');
     });
 
-    it('routes to REAL when subject has no marker', async () => {
-      const router = makeRouter();
+    it('routes to REAL when subject has no marker and fiscal_code is whitelisted', async () => {
+      const router = makeRouter(async (fc) => fc === 'RSSMRA80A01H501T');
       const decision = await router.route(req({
         method: 'POST', path: '/messages',
-        rawBody: JSON.stringify({ content: { subject: 'Notifica ordinaria' } })
+        rawBody: JSON.stringify({ fiscal_code: 'RSSMRA80A01H501T', content: { subject: 'Notifica ordinaria' } })
       }));
       expect(decision.lane).to.equal('REAL');
     });
 
-    it('routes to REAL when content is present but subject is absent', async () => {
-      const router = makeRouter();
-      const decision = await router.route(req({
-        method: 'POST', path: '/messages',
-        rawBody: JSON.stringify({ content: { markdown: 'no subject here' } })
-      }));
-      expect(decision.lane).to.equal('REAL');
+    it('throws 400 when subject has no marker and fiscal_code is NOT whitelisted (no leak to REAL)', async () => {
+      const router = makeRouter(async () => false);
+      try {
+        await router.route(req({
+          method: 'POST', path: '/messages',
+          rawBody: JSON.stringify({ fiscal_code: 'AAAAAA00A00A000A', content: { subject: 'Notifica ordinaria' } })
+        }));
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err.statusCode).to.equal(400);
+      }
     });
 
-    it('routes to REAL when content/subject is missing', async () => {
-      const router = makeRouter();
-      const decision = await router.route(req({
-        method: 'POST', path: '/messages', rawBody: JSON.stringify({})
-      }));
-      expect(decision.lane).to.equal('REAL');
+    it('throws 400 when content is present but subject is absent (CF not whitelisted)', async () => {
+      const router = makeRouter(async () => false);
+      try {
+        await router.route(req({
+          method: 'POST', path: '/messages',
+          rawBody: JSON.stringify({ fiscal_code: 'AAAAAA00A00A000A', content: { markdown: 'no subject here' } })
+        }));
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err.statusCode).to.equal(400);
+      }
     });
 
-    it('routes to REAL when the request has no body at all', async () => {
-      const router = makeRouter();
-      const decision = await router.route(req({
-        method: 'POST', path: '/messages', rawBody: null
-      }));
-      expect(decision.lane).to.equal('REAL');
+    it('throws 400 when the request has no body at all (no marker, no whitelisted CF)', async () => {
+      const router = makeRouter(async () => false);
+      try {
+        await router.route(req({
+          method: 'POST', path: '/messages', rawBody: null
+        }));
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err.statusCode).to.equal(400);
+      }
     });
 
     it('reuses an already-parsed body (parsedBody cache)', async () => {
-      const router = makeRouter();
+      const router = makeRouter(async () => false);
       const decision = await router.route(req({
         method: 'POST', path: '/messages',
         rawBody: 'IGNORED-should-not-be-parsed',
-        parsedBody: { content: { subject: '@io:OK_READ' } }
+        parsedBody: { fiscal_code: 'AAAAAA00A00A000A', content: { subject: '@io:OK_READ' } }
       }));
       expect(decision.lane).to.equal('MOCK');
     });

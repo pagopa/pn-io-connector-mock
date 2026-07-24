@@ -52,8 +52,18 @@ async function route(req) {
   if (req.method === 'POST' && seg.length === 1 && seg[0] === 'messages') {
     const body = parseBody(req);
     const subject = (body && body.content && body.content.subject) || '';
-    const lane = SEQUENCE_MARKER.test(subject) ? 'MOCK' : 'REAL';
-    return { endpoint: 'messages', lane, matchedCriterion: 'subject match @io:<sequenceName>' };
+
+    // Prima il marker: se presente, e' un messaggio di test -> MOCK.
+    if (SEQUENCE_MARKER.test(subject)) {
+      return { endpoint: 'messages', lane: 'MOCK', matchedCriterion: 'subject match @io:<sequenceName>' };
+    }
+
+    // Nessun marker: decide la whitelist, come /profiles.
+    // un CF di test (non whitelistato) senza marker non deve mai raggiungere l'IO reale -> 400 (fail-closed).
+    if (await routingSetClient.contains(body.fiscal_code)) {
+      return { endpoint: 'messages', lane: 'REAL', matchedCriterion: 'no marker; fiscal_code in MapIoConnectorMockRealTaxIdsWhitelist' };
+    }
+    throw badRequest('Test fiscal_code (not whitelisted) without @io:<sequenceName> marker in content.subject');
   }
 
   // GET /messages/{fiscal_code}/{id}  (getMessage)
