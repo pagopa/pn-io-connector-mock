@@ -1,6 +1,5 @@
 {
   "Parameters": {
-    "MockSequenceParameterNames": "MapIoConnectorMockSequence",
     "SenderNotAllowedParameterName": "MapIoConnectorMockSenderNotAllowed"
   }
 }
