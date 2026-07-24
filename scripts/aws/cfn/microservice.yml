@@ -146,11 +146,6 @@ Parameters:
     Default: ''
 
   # -- Mock specific SSM parameter names ---------------------------------------------
-  MockSequenceParameterNames:
-    Type: String
-    Default: 'MapIoConnectorMockSequence'
-    Description: 'Comma separated list of SSM parameter names holding the sequences.'
-
   SenderNotAllowedParameterName:
     Type: String
     Default: 'MapIoConnectorMockSenderNotAllowed'
@@ -237,8 +232,7 @@ Resources:
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
         ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
         ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
-        ContainerEnvEntry4: !Sub 'PN_IOCONNECTORMOCK_MOCKSEQUENCEPARAMETERNAMES=${MockSequenceParameterNames}'
-        ContainerEnvEntry5: !Sub 'PN_IOCONNECTORMOCK_SENDERNOTALLOWED_PARAMETERNAME=${SenderNotAllowedParameterName}'
+        ContainerEnvEntry4: !Sub 'PN_IOCONNECTORMOCK_SENDERNOTALLOWED_PARAMETERNAME=${SenderNotAllowedParameterName}'
         MappedPaths: '/io-connector-mock/message*,/io-connector-mock/profile*'
         ECSClusterName: !Ref ECSClusterName
         Subnets: !Ref VpcEgressSubnetsIds

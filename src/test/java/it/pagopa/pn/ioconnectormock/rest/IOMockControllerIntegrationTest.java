@@ -4,13 +4,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.FiscalCodePayload;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.MessageContent;
 import it.pagopa.pn.ioconnectormock.generated.openapi.server.v1.dto.NewMessage;
+import it.pagopa.pn.ioconnectormock.localstack.LocalStackTestConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -18,6 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(LocalStackTestConfig.class)
 class IOMockControllerIntegrationTest {
 
     private static final String SEQUENCE_NAME = "OK_READ_THEN_PAID";
@@ -62,7 +66,15 @@ class IOMockControllerIntegrationTest {
                         .content(json(newMessage("@io:" + SEQUENCE_NAME))))
                 .andExpect(status().isCreated())
                 .andReturn();
-        assertThat(result.getResponse().getContentAsString()).contains("ioMessageId");
+        assertThat(result.getResponse().getContentAsString()).contains("MOCK-OK_READ_THEN_PAID");
+    }
+
+    @Test
+    void submitUnknownSequenceReturns400() throws Exception {
+        mockMvc.perform(post(MESSAGES)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(newMessage("@io:UNKNOWN_SEQUENCE"))))
+                .andExpect(status().isBadRequest());
     }
 
     private String json(Object value) throws Exception {
