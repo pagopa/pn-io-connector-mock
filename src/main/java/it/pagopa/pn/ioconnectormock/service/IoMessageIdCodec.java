@@ -5,6 +5,10 @@ import it.pagopa.pn.ioconnectormock.model.IoMessageId;
 
 import java.util.UUID;
 
+/**
+ * Codifica e decodifica l'id del messaggio mock nel formato
+ * {@code MOCK-<sequenceName>-<submitMillis>-<rand>}
+ */
 public class IoMessageIdCodec {
 
     private static final String PREFIX = "MOCK-";
@@ -13,6 +17,12 @@ public class IoMessageIdCodec {
     private IoMessageIdCodec() {
     }
 
+    /**
+     * Costruisce l'id messaggio a partire da nome sequenza e istante di invio.
+     *
+     * @param submitMillis istante di invio in millisecondi epoch
+     * @throws IoMessageIdFormatException se il nome è vuoto o contiene trattini
+     */
     public static String encode(String sequenceName, long submitMillis) {
         if (sequenceName == null || sequenceName.isBlank()) {
             throw new IoMessageIdFormatException("sequenceName must not be null or blank");
@@ -24,6 +34,11 @@ public class IoMessageIdCodec {
         return PREFIX + sequenceName + "-" + submitMillis + "-" + rand;
     }
 
+    /**
+     * Decodifica un id messaggio nei suoi componenti.
+     *
+     * @throws IoMessageIdFormatException se l'id è vuoto, privo del prefisso o con struttura non valida
+     */
     public static IoMessageId decode(String id) {
         if (id == null || id.isBlank()) {
             throw new IoMessageIdFormatException("id must not be null or blank");
@@ -31,6 +46,8 @@ public class IoMessageIdCodec {
         if (!id.startsWith(PREFIX)) {
             throw new IoMessageIdFormatException("id must start with MOCK- prefix");
         }
+        // Parsing da destra: prima si stacca rand, poi submitMillis; ciò che resta è
+        // il nome sequenza, che per contratto non contiene trattini.
         String withoutPrefix = id.substring(PREFIX.length());
         int lastHyphen = withoutPrefix.lastIndexOf('-');
         if (lastHyphen < 0) {
@@ -55,6 +72,7 @@ public class IoMessageIdCodec {
         return new IoMessageId(sequenceName, submitMillis);
     }
 
+    /** Genera un suffisso casuale, scartando quelli tutti numerici per evitare ambiguità di parsing. */
     private static String generateRand() {
         String rand;
         do {

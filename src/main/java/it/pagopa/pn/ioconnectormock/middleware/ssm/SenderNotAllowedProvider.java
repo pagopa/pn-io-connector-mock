@@ -9,6 +9,9 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Verifica se un codice fiscale è presente nella lista dei sender not allowed.
+ */
 @Component
 @CustomLog
 public class SenderNotAllowedProvider {
@@ -22,6 +25,11 @@ public class SenderNotAllowedProvider {
         this.parameterName = config.getSenderNotAllowedParameterName();
     }
 
+    /**
+     * Indica se il codice fiscale è nella lista dei sender not allowed.
+     *
+     * @return {@code true} se presente; {@code false} se il codice è vuoto o non elencato
+     */
     public boolean isDenied(String fiscalCode) {
         if (!StringUtils.hasText(fiscalCode)) {
             return false;
@@ -31,6 +39,7 @@ public class SenderNotAllowedProvider {
         return deniedFiscalCodes.contains(fiscalCode.trim());
     }
 
+    /** Converte l'elenco in un set di codici fiscali, ignorando i valori vuoti. */
     private Set<String> parseDenyList(String value) {
         return Arrays.stream(value.split(","))
                 .filter(StringUtils::hasText)

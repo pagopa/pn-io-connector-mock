@@ -37,6 +37,11 @@ public class IOMockService {
 
     private static final Pattern MARKER = Pattern.compile("@io:([A-Za-z0-9_]+)");
 
+    /**
+     * Valuta se il mittente è abilitato consultando la lista dei sender not allowed.
+     *
+     * @return {@code true} se il codice fiscale non è nella lista dei sender not allowed.
+     */
     public boolean evaluateProfile(String fiscalCode) {
         log.logStartingProcess(GET_PROFILE);
         boolean senderAllowed = !senderNotAllowedProvider.isDenied(fiscalCode);
@@ -45,6 +50,14 @@ public class IOMockService {
         return senderAllowed;
     }
 
+    /**
+     * Simula l'invio di un messaggio: estrae dal subject il marker della sequenza,
+     * ne verifica l'esistenza e restituisce l'id messaggio codificato.
+     *
+     * @return l'id messaggio mock
+     * @throws MarkerNotFoundException se il subject non contiene il marker {@code @io:}
+     * @throws SequenceUnknownException se la sequenza indicata non esiste
+     */
     public String submitMessage(NewMessage newMessage) {
         log.logStartingProcess(SUBMIT_MESSAGE);
 
@@ -58,6 +71,7 @@ public class IOMockService {
                 .orElseThrow(() -> new SequenceUnknownException("Unknown sequence '" + sequenceName + "'"));
         log.info("Sequence found with sequenceName={}", sequenceName);
 
+        // L'istante di invio viene incorporato nell'id
         String ioMessageId = IoMessageIdCodec.encode(sequenceName, Instant.now().toEpochMilli());
 
         MDC.put(MDC_IO_MESSAGE_ID, ioMessageId);
@@ -70,6 +84,13 @@ public class IOMockService {
         }
     }
 
+    /**
+     * Ricostruisce il dettaglio e lo stato corrente del messaggio a partire dal suo id.
+     * Lo stato dipende dal tempo trascorso dall'invio codificato nell'id.
+     *
+     * @throws MessageNotFoundException se la sequenza referenziata dall'id non esiste
+     * @throws it.pagopa.pn.ioconnectormock.exception.IoMessageIdFormatException se l'id è malformato
+     */
     public ExternalMessageResponseWithContent getMessage(String fiscalCode, String id) {
         log.logStartingProcess(GET_MESSAGE);
         MDC.put(MDC_IO_MESSAGE_ID, id);
@@ -81,6 +102,7 @@ public class IOMockService {
                     .orElseThrow(() -> new MessageNotFoundException(
                             "Sequence '" + decodeMessageId.sequenceName() + "' not found in registry"));
 
+            // Secondi trascorsi dall'invio
             long elapsedSeconds = Math.floorDiv(Instant.now().toEpochMilli() - decodeMessageId.submitMillis(), 1000L);
             StateSnapshot snapshot = getStatusSnapshot(sequence, elapsedSeconds);
 
@@ -102,11 +124,17 @@ public class IOMockService {
         }
     }
 
+    /** Calcola lo snapshot di stato azzerando eventuali valori negativi */
     private StateSnapshot getStatusSnapshot(Sequence sequence, long elapsedSeconds) {
         long clampedElapsedSeconds = Math.max(0, elapsedSeconds);
         return sequenceEngine.computeSnapshot(sequence, clampedElapsedSeconds);
     }
 
+    /**
+     * Estrae il nome della sequenza dal marker {@code @io:<sequenceName>} nel subject.
+     *
+     * @return il nome della sequenza, vuoto se il subject è assente o privo di marker
+     */
     public Optional<String> extractMarker(String subject) {
         if (!StringUtils.hasText(subject)) {
             return Optional.empty();

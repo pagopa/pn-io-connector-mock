@@ -24,6 +24,9 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
+/**
+ * Effettua il parsing e la validazione del JSON delle sequenze.
+ */
 @Component
 @CustomLog
 public class SequenceParser {
@@ -35,6 +38,11 @@ public class SequenceParser {
             .readerFor(new TypeReference<List<RawSequence>>() {
             });
 
+    /**
+     * Converte il JSON in sequenze validate, verificando l'unicità dei nomi.
+     *
+     * @throws SequenceValidationException se il JSON è malformato o una sequenza non è valida
+     */
     public List<Sequence> parse(String json) {
         List<RawSequence> rawSequences = readJson(json);
         Set<String> seenNames = new HashSet<>();
@@ -61,6 +69,11 @@ public class SequenceParser {
         }
     }
 
+    /**
+     * Valida una singola sequenza e la converte nel modello, ordinandone gli step.
+     *
+     * @throws SequenceValidationException se nome, step o ordinamento non sono validi
+     */
     private Sequence toSequence(RawSequence rawSequence) {
         if (rawSequence == null) {
             throw new SequenceValidationException("Sequence array must not contain null elements");
@@ -77,6 +90,7 @@ public class SequenceParser {
         for (int i = 0; i < rawSequence.steps().size(); i++) {
             steps.add(toStep(sequenceName, i, rawSequence.steps().get(i)));
         }
+        // Ordinamento per afterSeconds
         steps.sort(Comparator.comparingInt(SequenceStep::afterSeconds));
 
         validateOrdering(sequenceName, steps);
@@ -84,6 +98,10 @@ public class SequenceParser {
         return new Sequence(sequenceName, steps);
     }
 
+    /**
+     * Valida e converte un singolo step: {@code afterSeconds} non negativo e almeno
+     * uno tra status, readStatus, paymentStatus valorizzato.
+     */
     private SequenceStep toStep(String sequenceName, int stepIndex, RawStep rawStep) {
         if (rawStep == null) {
             throw new SequenceValidationException(stepError(sequenceName, stepIndex, "step must not be null"));
@@ -101,6 +119,7 @@ public class SequenceParser {
                 toEnum(sequenceName, stepIndex, "paymentStatus", rawStep.paymentStatus(), PaymentStatus::fromValue));
     }
 
+    /** Converte una stringa nel relativo enum, {@code null} se il valore è assente. */
     private <E> E toEnum(String sequenceName, int stepIndex, String field, String value, Function<String, E> fromValue) {
         if (value == null) {
             return null;
@@ -113,6 +132,7 @@ public class SequenceParser {
         }
     }
 
+    /** Verifica che gli step abbiano {@code afterSeconds} strettamente crescenti (nessun duplicato). */
     private void validateOrdering(String sequenceName, List<SequenceStep> sortedSteps) {
         for (int i = 1; i < sortedSteps.size(); i++) {
             if (sortedSteps.get(i).afterSeconds() == sortedSteps.get(i - 1).afterSeconds()) {
@@ -123,6 +143,7 @@ public class SequenceParser {
         }
     }
 
+    /** Verifica che il primo step parta da {@code afterSeconds=0} e definisca uno status. */
     private void validateFirstStep(String sequenceName, SequenceStep firstStep) {
         if (firstStep.afterSeconds() != 0 || firstStep.status() == null) {
             throw new SequenceValidationException("Sequence '" + sequenceName
