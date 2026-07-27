@@ -11,14 +11,23 @@ import org.springframework.stereotype.Component;
 @Component
 public class SequenceEngine {
 
+    /**
+     * Restituisce lo snapshot risultante dall'applicazione, in ordine, di tutti gli
+     * step con {@code afterSeconds <= elapsedSeconds}. Ogni campo conserva l'ultimo
+     * valore non-null incontrato.
+     *
+     * @param elapsedSeconds secondi trascorsi dall'invio del messaggio
+     */
     public StateSnapshot computeSnapshot(Sequence sequence, long elapsedSeconds) {
         MessageStatusValue status = null;
         ReadStatus readStatus = null;
         PaymentStatus paymentStatus = null;
         for (SequenceStep step : sequence.steps()) {
+            // Gli step sono ordinati per afterSeconds: al primo step futuro si interrompe.
             if (step.afterSeconds() > elapsedSeconds) {
                 break;
             }
+            // Ogni campo viene aggiornato solo se lo step lo valorizza
             if (step.status() != null) {
                 status = step.status();
             }

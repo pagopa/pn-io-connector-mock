@@ -11,6 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Espone le sequenze mock mergiandole in un'unica lista (se presenti più parametri)
+ * A parità di nome, l'ultimo parametro nella lista di configurazione prevale.
+ */
 @Component
 @CustomLog
 public class SequenceProvider {
@@ -27,6 +31,11 @@ public class SequenceProvider {
         this.parameterNames = config.getMockSequenceParameterNames();
     }
 
+    /**
+     * Restituisce la sequenza con il nome indicato, se presente.
+     *
+     * @return la sequenza, vuoto se il nome è {@code null} o sconosciuto
+     */
     public Optional<Sequence> getSequence(String sequenceName) {
         if (sequenceName == null) {
             return Optional.empty();
@@ -34,6 +43,7 @@ public class SequenceProvider {
         return Optional.ofNullable(mergedSequences().get(sequenceName));
     }
 
+    /** Legge e fonde tutte le sequenze dai parametri configurati, in ordine. */
     private Map<String, Sequence> mergedSequences() {
         Map<String, Sequence> merged = new HashMap<>();
         for (String parameterName : parameterNames) {
@@ -43,9 +53,11 @@ public class SequenceProvider {
         return merged;
     }
 
+    /** Inserisce le sequenze nella mappa; un nome già presente viene sovrascritto e loggato. */
     private void mergeInto(Map<String, Sequence> merged, String parameterName, List<Sequence> sequences) {
         for (Sequence sequence : sequences) {
             Sequence previous = merged.put(sequence.sequenceName(), sequence);
+            // Override di una sequenza duplicata
             if (previous != null) {
                 log.warn("sequence_duplicate name={} overridden by parameter={}",
                         sequence.sequenceName(), parameterName);
