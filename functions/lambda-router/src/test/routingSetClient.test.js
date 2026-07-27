@@ -1,0 +1,117 @@
+"use strict";
+
+const { expect } = require('chai');
+const { mockClient } = require('aws-sdk-client-mock');
+const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
+
+process.env.PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME = 'MapIoConnectorMockRealTaxIdsWhitelist';
+process.env.ROUTING_CACHE_TTL_MS = '300000';
+
+const routingSetClient = require('../app/lib/routingSetClient');
+
+const ssmMock = mockClient(SSMClient);
+
+function paramValue(list) {
+  return { Parameter: { Name: 'MapIoConnectorMockRealTaxIdsWhitelist', Value: JSON.stringify(list) } };
+}
+
+describe('routingSetClient', () => {
+  beforeEach(() => {
+    ssmMock.reset();
+    routingSetClient._resetCache();
+  });
+
+  it('returns true when the fiscal code is in the whitelist', async () => {
+    ssmMock.on(GetParameterCommand).resolves(paramValue(['RSSMRA80A01H501T', 'VRDLGI85M01H501Z']));
+    expect(await routingSetClient.contains('RSSMRA80A01H501T')).to.equal(true);
+  });
+
+  it('returns false when the fiscal code is not in the whitelist', async () => {
+    ssmMock.on(GetParameterCommand).resolves(paramValue(['RSSMRA80A01H501T']));
+    expect(await routingSetClient.contains('AAAAAA00A00A000A')).to.equal(false);
+  });
+
+  it('returns false for an empty fiscal code without querying SSM', async () => {
+    ssmMock.on(GetParameterCommand).resolves(paramValue(['RSSMRA80A01H501T']));
+    expect(await routingSetClient.contains('')).to.equal(false);
+    expect(ssmMock.commandCalls(GetParameterCommand)).to.have.length(0);
+  });
+
+  it('caches the parameter and does not call SSM twice within the TTL', async () => {
+    ssmMock.on(GetParameterCommand).resolves(paramValue(['RSSMRA80A01H501T']));
+    await routingSetClient.contains('RSSMRA80A01H501T');
+    await routingSetClient.contains('RSSMRA80A01H501T');
+    expect(ssmMock.commandCalls(GetParameterCommand)).to.have.length(1);
+  });
+
+  it('reloads from SSM once the TTL has expired', async () => {
+    process.env.ROUTING_CACHE_TTL_MS = '0';
+    delete require.cache[require.resolve('../app/lib/routingSetClient')];
+    const freshClient = require('../app/lib/routingSetClient');
+    ssmMock.on(GetParameterCommand).resolves(paramValue(['RSSMRA80A01H501T']));
+    await freshClient.contains('RSSMRA80A01H501T');
+    await freshClient.contains('RSSMRA80A01H501T');
+    expect(ssmMock.commandCalls(GetParameterCommand).length).to.be.greaterThan(1);
+    process.env.ROUTING_CACHE_TTL_MS = '300000';
+    delete require.cache[require.resolve('../app/lib/routingSetClient')];
+  });
+
+  it('propagates SSM errors to the caller', async () => {
+    ssmMock.on(GetParameterCommand).rejects(new Error('SSM unavailable'));
+    try {
+      await routingSetClient.contains('RSSMRA80A01H501T');
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect(err.message).to.include('SSM unavailable');
+    }
+  });
+
+  it('throws when the parameter value is not a JSON array', async () => {
+    ssmMock.on(GetParameterCommand).resolves({ Parameter: { Value: '{"not":"an-array"}' } });
+    try {
+      await routingSetClient.contains('RSSMRA80A01H501T');
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect(err.message).to.include('array');
+    }
+  });
+
+  it('throws when the parameter value is not valid JSON', async () => {
+    ssmMock.on(GetParameterCommand).resolves({ Parameter: { Value: 'not-json{' } });
+    try {
+      await routingSetClient.contains('RSSMRA80A01H501T');
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect(err.message).to.include('not valid JSON');
+    }
+  });
+
+  it('treats a missing parameter value as an empty routing-set', async () => {
+    ssmMock.on(GetParameterCommand).resolves({ Parameter: {} });
+    expect(await routingSetClient.contains('RSSMRA80A01H501T')).to.equal(false);
+  });
+
+  it('treats a missing Parameter object as an empty routing-set', async () => {
+    ssmMock.on(GetParameterCommand).resolves({});
+    expect(await routingSetClient.contains('RSSMRA80A01H501T')).to.equal(false);
+  });
+
+  it('uses default parameter name and TTL when env vars are unset', async () => {
+    const savedName = process.env.PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME;
+    const savedTtl = process.env.ROUTING_CACHE_TTL_MS;
+    delete process.env.PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME;
+    delete process.env.ROUTING_CACHE_TTL_MS;
+    delete require.cache[require.resolve('../app/lib/routingSetClient')];
+    try {
+      const fresh = require('../app/lib/routingSetClient');
+      ssmMock.on(GetParameterCommand).resolves(paramValue(['RSSMRA80A01H501T']));
+      expect(await fresh.contains('RSSMRA80A01H501T')).to.equal(true);
+      const call = ssmMock.commandCalls(GetParameterCommand).pop();
+      expect(call.args[0].input.Name).to.equal('MapIoConnectorMockRealTaxIdsWhitelist');
+    } finally {
+      if (savedName !== undefined) process.env.PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME = savedName;
+      if (savedTtl !== undefined) process.env.ROUTING_CACHE_TTL_MS = savedTtl;
+      delete require.cache[require.resolve('../app/lib/routingSetClient')];
+    }
+  });
+});

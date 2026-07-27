@@ -34,6 +34,12 @@ MOCK_SEQUENCE_PARAMETER_VALUE='[
 SENDER_NOT_ALLOWED_PARAMETER_NAME="MapIoConnectorMockSenderNotAllowed"
 SENDER_NOT_ALLOWED_PARAMETER_VALUE='[]'
 
+REAL_TAX_IDS_WHITELIST_PARAMETER_NAME="MapIoConnectorMockRealTaxIdsWhitelist"
+REAL_TAX_IDS_WHITELIST_PARAMETER_VALUE='[
+  "RSSMRA80A01H501U",
+  "VRDLGI85M20F205X"
+]'
+
 ## LOGGING FUNCTIONS ##
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 
@@ -79,6 +85,7 @@ initialize_ssm() {
 
   create_ssm_parameter "$MOCK_SEQUENCE_PARAMETER_NAME" "$MOCK_SEQUENCE_PARAMETER_VALUE" || return_code=1
   create_ssm_parameter "$SENDER_NOT_ALLOWED_PARAMETER_NAME" "$SENDER_NOT_ALLOWED_PARAMETER_VALUE" || return_code=1
+  create_ssm_parameter "$REAL_TAX_IDS_WHITELIST_PARAMETER_NAME" "$REAL_TAX_IDS_WHITELIST_PARAMETER_VALUE" || return_code=1
 
   return $return_code
 }

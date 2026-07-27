@@ -1,0 +1,22 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/api/v1/messages",
+  "rawQueryString": "",
+  "headers": {
+    "content-type": "application/json",
+    "ocp-apim-subscription-key": "test-subscription-key",
+    "host": "abcdefghij.lambda-url.eu-south-1.on.aws"
+  },
+  "body": "{\"fiscal_code\":\"RSSMRA80A01H501T\",\"content\":{\"subject\":\"Notifica @io:OK_READ_THEN_PAID\",\"markdown\":\"corpo\"}}",
+  "isBase64Encoded": false,
+  "requestContext": {
+    "http": {
+      "method": "POST",
+      "path": "/api/v1/messages",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "10.0.0.10",
+      "userAgent": "io-connector"
+    }
+  }
+}
