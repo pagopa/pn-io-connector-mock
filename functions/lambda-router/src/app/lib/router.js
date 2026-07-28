@@ -44,8 +44,10 @@ async function route(req) {
   if (req.method === 'POST' && seg.length === 1 && seg[0] === 'profiles') {
     const body = parseBody(req);
 
-    const lane = (await routingSetClient.contains(body.fiscal_code)) ? 'REAL' : 'MOCK';
-    return { endpoint: 'profiles', lane, matchedCriterion: 'fiscal_code NOT in MapIoConnectorMockRealTaxIdsWhitelist' };
+    if (await routingSetClient.contains(body.fiscal_code)) {
+      return { endpoint: 'profiles', lane: 'REAL', matchedCriterion: 'fiscal_code in MapIoConnectorMockRealTaxIdsWhitelist' };
+    }
+    return { endpoint: 'profiles', lane: 'MOCK', matchedCriterion: 'fiscal_code NOT in MapIoConnectorMockRealTaxIdsWhitelist' };
   }
 
   // POST /messages  (submitMessageforUserWithFiscalCodeInBody)
@@ -69,9 +71,14 @@ async function route(req) {
   // GET /messages/{fiscal_code}/{id}  (getMessage)
   if (req.method === 'GET' && seg.length === 3 && seg[0] === 'messages') {
     const id = seg[2];
-    const lane = id.startsWith(MOCK_ID_PREFIX) ? 'MOCK' : 'REAL';
+    const isMock = id.startsWith(MOCK_ID_PREFIX);
 
-    return { endpoint: 'getMessage', lane, ioMessageId: id, matchedCriterion: 'id prefix MOCK-' };
+    return {
+      endpoint: 'getMessage',
+      lane: isMock ? 'MOCK' : 'REAL',
+      ioMessageId: id,
+      matchedCriterion: isMock ? 'id prefix MOCK-' : 'id without MOCK- prefix'
+    };
   }
 
   // io-connector chiama solo i 3 endpoint sopra (D5): ogni altro path e' inatteso.

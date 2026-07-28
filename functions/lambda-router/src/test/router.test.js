@@ -26,6 +26,7 @@ describe('router', () => {
       }));
       expect(decision.endpoint).to.equal('profiles');
       expect(decision.lane).to.equal('REAL');
+      expect(decision.matchedCriterion).to.equal('fiscal_code in MapIoConnectorMockRealTaxIdsWhitelist');
     });
 
     it('routes to MOCK when fiscal_code is not in the whitelist', async () => {
@@ -35,6 +36,7 @@ describe('router', () => {
         rawBody: JSON.stringify({ fiscal_code: 'AAAAAA00A00A000A' })
       }));
       expect(decision.lane).to.equal('MOCK');
+      expect(decision.matchedCriterion).to.equal('fiscal_code NOT in MapIoConnectorMockRealTaxIdsWhitelist');
     });
 
     it('throws 400 when body is not valid JSON', async () => {
@@ -57,6 +59,7 @@ describe('router', () => {
       }));
       expect(decision.endpoint).to.equal('messages');
       expect(decision.lane).to.equal('MOCK');
+      expect(decision.matchedCriterion).to.equal('subject match @io:<sequenceName>');
     });
 
     it('routes to REAL when subject has no marker and fiscal_code is whitelisted', async () => {
@@ -66,6 +69,7 @@ describe('router', () => {
         rawBody: JSON.stringify({ fiscal_code: 'RSSMRA80A01H501T', content: { subject: 'Notifica ordinaria' } })
       }));
       expect(decision.lane).to.equal('REAL');
+      expect(decision.matchedCriterion).to.equal('no marker; fiscal_code in MapIoConnectorMockRealTaxIdsWhitelist');
     });
 
     it('throws 400 when subject has no marker and fiscal_code is NOT whitelisted (no leak to REAL)', async () => {
@@ -136,6 +140,7 @@ describe('router', () => {
       expect(decision.endpoint).to.equal('getMessage');
       expect(decision.lane).to.equal('MOCK');
       expect(decision.ioMessageId).to.equal('MOCK-OK_READ_THEN_PAID-1750579200000-a1b2c3');
+      expect(decision.matchedCriterion).to.equal('id prefix MOCK-');
     });
 
     it('routes to REAL when id has no MOCK- prefix', async () => {
@@ -145,6 +150,7 @@ describe('router', () => {
       }));
       expect(decision.lane).to.equal('REAL');
       expect(decision.ioMessageId).to.equal('01ABCDEF1234567890');
+      expect(decision.matchedCriterion).to.equal('id without MOCK- prefix');
     });
   });
 

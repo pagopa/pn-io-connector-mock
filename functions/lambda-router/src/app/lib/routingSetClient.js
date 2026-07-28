@@ -16,7 +16,7 @@ async function load() {
   try {
     list = raw ? JSON.parse(raw) : [];
   } catch (e) {
-    throw new Error(`Routing-set parameter '${PARAMETER_NAME}' is not valid JSON: ${raw}`);
+    throw new Error(`Routing-set parameter '${PARAMETER_NAME}' is not valid JSON`);
   }
   if (!Array.isArray(list)) {
     throw new Error(`Routing-set parameter '${PARAMETER_NAME}' must be a JSON array of strings`);
