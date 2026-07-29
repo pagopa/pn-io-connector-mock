@@ -1,23 +1,15 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: 'Example microservice deploy'
+Description: 'pn-io-connector-mock microservice'
 
 Parameters:
   ProjectName:
     Type: String
     Description: 'Usually pn can be pnXYZ where XYZ are the feature number, useful to create
-      experimental environments without crash official development environment'
+        experimental environments without crash official development environment'
 
   AlarmSNSTopicArn:
     Type: String
     Description: ARN of alarm topic
-
-  WebApiDnsName:
-    Type: String
-    Description: 'The DNS name used for WEB rest API.'
-  
-  CorsAllowedDomains:
-    Type: String
-    Description: 'Comma separated list of domains allowed to make cross origin request'
 
   ContainerImageUri:
     Type: String
@@ -35,57 +27,351 @@ Parameters:
     Type: String
     Description: 'The name of the ECS cluster where the microservice is going to be deployed'
 
-  SubnetsIds:
+  VpcEgressSubnetsIds:
     Type: String
-    Description: 'subnets ids comma separated list. Where to deploy the microservice'
+    Description: 'Subnets where the microservice egress traffic is routed'
 
   VpcId:
     Type: String
     Description: 'VpcId where the microservice is going to be deployed'
-  
+
   EcsDefaultSecurityGroup:
     Type: String
     Description: 'Default security group required by infrastructure'
 
   ApplicationLoadBalancerListenerArn:
     Type: String
-    Description: 'Load balancer listener where HTTP endpoints is going to be registered'
+    Description: 'Internal load balancer listener where the HTTP endpoint is registered'
 
   ApplicationLoadBalancerDomain:
     Type: String
-    Description: 'Base URL of the load balancer where the service is going to be reachable'
+    Description: 'Base URL of the internal load balancer where the service is reachable'
 
-  NetworkLoadBalancerLink:
+  AlbSecurityGroup:
     Type: String
-    Description: 'network load balancer link for API-GW'
-  
+    Description: 'Application load balancer security group'
+
   LogsKinesisSourceStreamArn:
     Type: String
-    Description: 'Kinesis stream that receive logs'
-  
+    Description: 'Kinesis stream that receives logs'
+
   Version:
     Type: String
     Description: 'keep track of used projects commitIds'
 
-Resources:
+  EcsLogGroup:
+    Type: String
+    Description: 'CloudWatch log group name (from storage.yml output)'
 
-  # PN-TemplateBeMs microservice
-  TemplateBeMsMicroservice:
+  HealthCheckInterval:
+    Type: Number
+    Default: 60
+
+  HealthCheckTimeout:
+    Type: Number
+    Default: 5
+
+  HealthyThresholdCount:
+    Type: Number
+    Default: 5
+
+  UnhealthyThresholdCount:
+    Type: Number
+    Default: 2
+
+  CpuValue:
+    Type: Number
+    Default: 1024
+    Description: Fargate virtual CPU quantity, 1024 equals one vCPU
+
+  MemoryAmount:
+    Type: String
+    Default: 2GB
+    AllowedValues: [ 2GB, 4GB, 6GB, 8GB ]
+
+  AutoscalingCheckPeriod:
+    Default: 60
+    Type: Number
+
+  AutoscalingDataPointN:
+    Default: 1
+    Type: Number
+
+  AutoscalingDataPointM:
+    Default: 1
+    Type: Number
+
+  AutoscalingThreshold:
+    Default: 70
+    Type: String
+
+  MinTasksNumber:
+    Default: 1
+    Type: Number
+
+  MaxTasksNumber:
+    Default: 1
+    Type: Number
+
+  LogAlarmStrategy:
+    Type: String
+    Default: 'FATAL'
+
+  WireTapLogActivation:
+    Type: String
+    Default: 'false'
+    AllowedValues: [ 'true', 'false' ]
+
+  PnCronAnalyzer:
+    Type: String
+    Default: '-'
+
+  FargateEFSFileSystemID:
+    Type: String
+    Description: "EFS Filesystem"
+
+  MountEfs:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+
+  LogsKinesisFilterPattern:
+    Type: String
+    Default: ''
+
+  ApplicativeEnvFileChecksum:
+    Type: String
+    Default: ''
+
+  # -- Mock specific SSM parameter names ---------------------------------------------
+  SenderNotAllowedParameterName:
+    Type: String
+    Default: 'MapIoConnectorMockSenderNotAllowed'
+    Description: 'SSM parameter name holding the deny-list.'
+
+  PnIoConnectorMockManagedPolicyName:
+    Type: String
+    Default: 'PnIoConnectorMockManagedPolicyName'
+    Description: 'Name of the managed policy associated to the mock task role.'
+
+  # -- Lambda router
+  MicroserviceBucketName:
+    Type: String
+    Default: ''
+    Description: 'Bucket S3 dove la pipeline copia gli artefatti del microservizio (function zip)'
+
+  MicroserviceBucketBaseKey:
+    Type: String
+    Default: ''
+    Description: 'Base key del microservizio nel bucket S3'
+
+  RouterLambdaTimeout:
+    Type: Number
+    Default: 30
+    Description: 'Timeout (s) della lambda-router; deve restare > ForwardTimeoutMs'
+
+  IoRealBaseUrl:
+    Type: String
+    Default: 'https://api.io.pagopa.it/api/v1'
+    Description: 'Base path corsia reale IO'
+
+  RealTaxIdsWhitelistParameterName:
+    Type: String
+    Default: 'MapIoConnectorMockRealTaxIdsWhitelist'
+    Description: 'SSM param con la whitelist dei CF instradati verso IO reale (gli altri -> mock)'
+
+  RoutingCacheTtlMs:
+    Type: Number
+    Default: 300000
+    Description: 'TTL cache routing-set in ms (DR3, default PT5M)'
+
+  ForwardTimeoutMs:
+    Type: Number
+    Default: 10000
+    Description: 'Timeout (ms) richiesta in uscita; deve restare < LambdaTimeout (fault tolerance, §3.6)'
+
+  PathPrefix:
+    Type: String
+    Default: '/api/v1'
+    Description: 'Prefisso di esposizione rimosso dal rawPath (WI6/WI7); stringa vuota per disabilitare'
+
+  RouterRulePriority:
+    Type: Number
+    Default: 100
+    Description: >-
+      Priorita' della listener rule dell'ALB interno che instrada /api/v1/* alla lambda-router.
+      Deve essere un valore libero, diverso da quello usato dalla regola del microservizio ECS.
+
+Resources:
+  PnIoConnectorMockMicroservice:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub "${TemplateBucketBaseUrl}/fragments/ecs-service.yaml"
+      TemplateURL: !Sub '${TemplateBucketBaseUrl}/fragments/ecs-service.yaml'
       Parameters:
-        MicroServiceUniqueName: !Sub '${ProjectName}-template-ms-be'
-        CpuValue: 512
-        MemoryAmount: 2GB
+        MicroServiceUniqueName: !Sub '${ProjectName}-io-connector-mock'
+        CpuValue: !Ref CpuValue
+        CpuArchitecture: ARM
+        MemoryAmount: !Ref MemoryAmount
+        HealthCheckTimeout: !Ref HealthCheckTimeout
+        HealthCheckInterval: !Ref HealthCheckInterval
+        HealthyThresholdCount: !Ref HealthyThresholdCount
+        UnhealthyThresholdCount: !Ref UnhealthyThresholdCount
+        AutoscalingStrategy: REST-API
+        AutoscalingThreshold: !Ref AutoscalingThreshold
+        AutoscalingCheckPeriod: !Ref AutoscalingCheckPeriod
+        MinTasksNumber: !Ref MinTasksNumber
+        MaxTasksNumber: !Ref MaxTasksNumber
+        AutoscalingDataPointN: !Ref AutoscalingDataPointN
+        AutoscalingDataPointM: !Ref AutoscalingDataPointM
         AlarmSNSTopicArn: !Ref AlarmSNSTopicArn
+        EfsFilesystem: !Ref FargateEFSFileSystemID
+        MountEfs: !Ref MountEfs
         ContainerImageURI: !Sub '${ContainerImageUri}'
         ContainerEnvEntry1: !Sub 'AWS_REGIONCODE=${AWS::Region}'
-        MappedPaths: '/template-ms-be/*'
+        ContainerEnvEntry2: !Sub 'WIRE_TAP_LOG_ACTIVATION=${WireTapLogActivation}'
+        ContainerEnvEntry3: !Sub 'PN_CRON_ANALYZER=${PnCronAnalyzer}'
+        ContainerEnvEntry4: !Sub 'PN_IOCONNECTORMOCK_SENDERNOTALLOWED_PARAMETERNAME=${SenderNotAllowedParameterName}'
+        MappedPaths: '/io-connector-mock/message*,/io-connector-mock/profile*'
         ECSClusterName: !Ref ECSClusterName
-        Subnets: !Ref SubnetsIds
+        Subnets: !Ref VpcEgressSubnetsIds
         VpcId: !Ref VpcId
         EcsDefaultSecurityGroup: !Ref EcsDefaultSecurityGroup
         LoadBalancerListenerArn: !Ref ApplicationLoadBalancerListenerArn
         LoadbalancerRulePriority: !Ref MicroserviceNumber
-        CloudwatchLogKinesisStreamArn: !Ref LogsKinesisSourceStreamArn
+        AlbSecurityGroup: !Ref AlbSecurityGroup
+        TaskRoleManagedPolicyArn: !Ref PnIoConnectorMockManagedPolicy
+        EcsLogGroup: !Ref EcsLogGroup
+        LogAlarmStrategyV1: !Ref LogAlarmStrategy
+        ApplicativeEnvFileChecksum: !Ref ApplicativeEnvFileChecksum
+
+  PnIoConnectorMockManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: 'Managed policy granting pn-io-connector-mock read access to its SSM parameters only'
+      ManagedPolicyName: !Ref PnIoConnectorMockManagedPolicyName
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/MapIoConnectorMock*'
+
+  RouterLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-io-connector-mock-router-sg'
+      GroupDescription: 'Security group for pn-io-connector-mock lambda-router'
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'Egress verso ALB interno del mock e verso IO reale'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-io-connector-mock-router-sg'
+
+  RouterLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-io-connector-mock-router'
+      RetentionInDays: 14
+
+  RouterLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-io-connector-mock-router-role'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        - !Ref PnIoConnectorMockManagedPolicy
+
+  RouterLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: RouterLambdaLogGroup
+    Properties:
+      FunctionName: !Sub '${ProjectName}-io-connector-mock-router'
+      Description: 'Router a due corsie mock/IO reale per i test QA di pn-io-connector'
+      Runtime: nodejs24.x
+      Handler: index.handler
+      MemorySize: 256
+      Timeout: !Ref RouterLambdaTimeout
+      TracingConfig:
+        Mode: Active
+      Role: !GetAtt RouterLambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref MicroserviceBucketName
+        S3Key: !Sub '${MicroserviceBucketBaseKey}/functions_zip/lambda-router.zip'
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref RouterLambdaSecurityGroup
+        SubnetIds: !Split [ ',', !Ref VpcEgressSubnetsIds ]
+      Environment:
+        Variables:
+          IO_REAL_BASE_URL: !Ref IoRealBaseUrl
+          MOCK_BASE_URL: !Sub 'http://${ApplicationLoadBalancerDomain}:8080/io-connector-mock'
+          PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME: !Ref RealTaxIdsWhitelistParameterName
+          ROUTING_CACHE_TTL_MS: !Ref RoutingCacheTtlMs
+          FORWARD_TIMEOUT_MS: !Ref ForwardTimeoutMs
+          PATH_PREFIX: !Ref PathPrefix
+      Tags:
+        - Key: pn-eni-related
+          Value: 'true'
+        - Key: pn-eni-related-groupName-regexp
+          Value:
+            Fn::Base64: !Sub '^${ProjectName}-io-connector-mock-router-sg.*$'
+
+  RouterTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${ProjectName}-io-conn-mock-router-tg'
+      TargetType: lambda
+      HealthCheckEnabled: false
+      Targets:
+        - Id: !GetAtt RouterLambda.Arn
+    DependsOn: RouterAlbInvokePermission
+
+  RouterAlbInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RouterLambda
+      Action: lambda:InvokeFunction
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+  RouterListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ApplicationLoadBalancerListenerArn
+      Priority: !Ref RouterRulePriority
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '/api/v1/*'
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref RouterTargetGroup
+
+Outputs:
+
+  RouterFunctionArn:
+    Value: !GetAtt RouterLambda.Arn
+    Description: 'ARN della lambda-router'
+
+  RouterInvokeBaseUrl:
+    Description: >-
+      Base URL da configurare in io-connector (WI7, PN_IO_CONNECTOR_IO_BASE_URL): l'ALB interno
+      sul path /api/v1. Nessuna firma richiesta (chiamata in-VPC).
+    Value: !Sub 'http://${ApplicationLoadBalancerDomain}:8080/api/v1'

@@ -1,0 +1,198 @@
+openapi: 3.0.3
+info:
+  title: pn-io-connector-mock API
+  version: 1.0.0
+  description: >
+    Stub del backend IO per i test QA di pn-io-connector. Espone i 3 endpoint
+    coinvolti nel flusso di invio messaggio (verifica profilo, invio messaggio,
+    polling stato). Gli schemi e gli operationId corrispondono a quelli usati dal
+    client generato dalle spec delle API di IO.
+tags:
+  - name: IoMock
+    description: Operazioni verso App IO
+paths:
+  /io-connector-mock/profiles:
+    post:
+      tags:
+        - IoMock
+      summary: Verifica profilo destinatario
+      description: >
+        Mock di getProfileByPOST. Ritorna sender_allowed=false se il fiscal_code
+        e' presente nella deny-list SSM (MapIoConnectorMockSenderNotAllowed),
+        altrimenti true. La selezione del destinatario "non abilitato" avviene
+        SOLO per fiscal_code.
+      operationId: getProfileByPOST
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalCodePayload'
+      responses:
+        '200':
+          description: Profilo valutato.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LimitedProfile'
+        '404':
+          description: Destinatario non registrato su AppIO.
+  /io-connector-mock/messages:
+    post:
+      tags:
+        - IoMock
+      summary: Invio messaggio
+      description: >
+        Mock di submitMessageforUserWithFiscalCodeInBody. Legge il marker
+        @io:<sequenceName> dal subject (content.subject), risolve la sequenceName
+        e ritorna un ioMessageId auto-descrittivo che incorpora sequenceName e
+        submitEpochMillis.
+      operationId: submitMessageforUserWithFiscalCodeInBody
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewMessage'
+      responses:
+        '201':
+          description: Messaggio creato.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedMessage'
+  /io-connector-mock/messages/{fiscal_code}/{id}:
+    get:
+      tags:
+        - IoMock
+      summary: Stato messaggio
+      description: >
+        Mock di getMessage. Decodifica sequenceName e submitTime dall'id, calcola
+        elapsed = now - submitTime, applica cumulativamente le tappe con
+        afterSeconds <= elapsed e ritorna lo snapshot dello stato. Il campo
+        message e' SEMPRE valorizzato.
+      operationId: getMessage
+      parameters:
+        - name: fiscal_code
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          description: ioMessageId auto-descrittivo.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Snapshot dello stato del messaggio al tempo corrente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExternalMessageResponseWithContent'
+components:
+  schemas:
+    FiscalCodePayload:
+      type: object
+      required:
+        - fiscal_code
+      properties:
+        fiscal_code:
+          type: string
+          example: "RSSMRA80A01H501U"
+    LimitedProfile:
+      type: object
+      required:
+        - sender_allowed
+      properties:
+        sender_allowed:
+          type: boolean
+          description: false se fiscal_code in deny-list, true altrimenti.
+    NewMessage:
+      type: object
+      required:
+        - fiscal_code
+        - content
+      properties:
+        fiscal_code:
+          type: string
+        feature_level_type:
+          type: string
+          enum:
+            - ADVANCED
+            - STANDARD
+          description: Atteso sempre ADVANCED.
+        content:
+          $ref: '#/components/schemas/MessageContent'
+    MessageContent:
+      type: object
+      required:
+        - subject
+        - markdown
+      properties:
+        subject:
+          type: string
+          description: Contiene il marker @io:<sequenceName> letto dal mock.
+          example: "Avviso di pagamento @io:OK_READ_THEN_PAID"
+        markdown:
+          type: string
+        payment_data:
+          type: object
+          description: Presente per i messaggi con pagamento (chiusura su READ+PAID).
+          nullable: true
+    CreatedMessage:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: ioMessageId auto-descrittivo.
+          example: "MOCK-OK_READ_THEN_PAID-1750579200000-a1b2c3"
+    ExternalMessageResponseWithContent:
+      type: object
+      required:
+        - message
+        - status
+      properties:
+        message:
+          $ref: '#/components/schemas/MessageDetail'
+        status:
+          $ref: '#/components/schemas/MessageStatusValue'
+        read_status:
+          $ref: '#/components/schemas/ReadStatus'
+        payment_status:
+          $ref: '#/components/schemas/PaymentStatus'
+    MessageDetail:
+      type: object
+      description: Sempre valorizzato.
+      properties:
+        id:
+          type: string
+        fiscal_code:
+          type: string
+        subject:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    MessageStatusValue:
+      type: string
+      enum:
+        - ACCEPTED
+        - THROTTLED
+        - FAILED
+        - PROCESSED
+        - REJECTED
+    ReadStatus:
+      type: string
+      enum:
+        - UNAVAILABLE
+        - UNREAD
+        - READ
+    PaymentStatus:
+      type: string
+      enum:
+        - PAID
+        - NOT_PAID
