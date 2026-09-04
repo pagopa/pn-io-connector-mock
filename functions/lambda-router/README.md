@@ -23,7 +23,7 @@ index.js                     entry point (exports.handler)
 src/app/eventHandler.js       orchestrazione: adapter -> router -> forwarder
 src/app/lib/eventAdapter.js   evento ALB target / Function URL v2 -> Request canonica
 src/app/lib/router.js         regole di routing -> RouteDecision           (doppia corsia)
-src/app/lib/routingSetClient.js  whitelist CF (->reale) da SSM + cache TTL (DR3)
+src/app/lib/routingSetClient.js  whitelist CF (->reale) da SSM (letta a ogni richiesta)
 src/app/lib/ssmClient.js      client SSM (init condizionale LocalStack)
 src/app/lib/forwarder.js      pass-through http/https + re-basepath + trace id (DR4)
 src/app/lib/responseBuilder.js  risposte API GW proxy
@@ -65,7 +65,6 @@ richiede parametri della Lambda: usano tutti i default del template.
 | `IO_REAL_BASE_URL` | `https://api.io.pagopa.it/api/v1` | corsia reale |
 | `MOCK_BASE_URL` | `http://localhost:8080/io-connector-mock` | corsia mock (in cloud: `http://<ALB>:8080/io-connector-mock`) |
 | `PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME` | `MapIoConnectorMockRealTaxIdsWhitelist` | whitelist CF verso IO reale (SSM) |
-| `ROUTING_CACHE_TTL_MS` | `300000` | TTL cache routing-set — **DR3** |
 | `FORWARD_TIMEOUT_MS` | `10000` | timeout richiesta in uscita; alla scadenza → 504 (§3.6) |
 | `PATH_PREFIX` | `/api/v1` | prefisso di esposizione rimosso dal `rawPath` (WI6/WI7); `''` disabilita |
 | `AWS_SSM_ENDPOINT` | *(vuoto in cloud)* | endpoint SSM per test/locale (LocalStack) |

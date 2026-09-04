@@ -3,7 +3,6 @@
     "SenderNotAllowedParameterName": "MapIoConnectorMockSenderNotAllowed",
     "IoRealBaseUrl": "https://api.io.pagopa.it/api/v1",
     "RealTaxIdsWhitelistParameterName": "MapIoConnectorMockRealTaxIdsWhitelist",
-    "RoutingCacheTtlMs": "300000",
     "ForwardTimeoutMs": "10000"
   }
 }
