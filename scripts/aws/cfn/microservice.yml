@@ -182,11 +182,6 @@ Parameters:
     Default: 'MapIoConnectorMockRealTaxIdsWhitelist'
     Description: 'SSM param con la whitelist dei CF instradati verso IO reale (gli altri -> mock)'
 
-  RoutingCacheTtlMs:
-    Type: Number
-    Default: 300000
-    Description: 'TTL cache routing-set in ms (DR3, default PT5M)'
-
   ForwardTimeoutMs:
     Type: Number
     Default: 10000
@@ -323,7 +318,6 @@ Resources:
           IO_REAL_BASE_URL: !Ref IoRealBaseUrl
           MOCK_BASE_URL: !Sub 'http://${ApplicationLoadBalancerDomain}:8080/io-connector-mock'
           PN_IOCONNECTORMOCK_REALTAXIDSWHITELIST_PARAMETERNAME: !Ref RealTaxIdsWhitelistParameterName
-          ROUTING_CACHE_TTL_MS: !Ref RoutingCacheTtlMs
           FORWARD_TIMEOUT_MS: !Ref ForwardTimeoutMs
           PATH_PREFIX: !Ref PathPrefix
       Tags:
