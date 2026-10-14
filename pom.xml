@@ -9,7 +9,7 @@
     </parent>
 
     <artifactId>pn-io-connector-mock</artifactId>
-    <version>1.0.0-RC.1</version>
+    <version>1.0.0</version>
     <name>pn-io-connector-mock</name>
     <description>Stateless stub of the AppIO backend for QA testing of pn-io-connector</description>
 
