@@ -12,3 +12,4 @@ Stub stateless del backend AppIO per ambienti di test QA, che espone `getProfile
 
 Nessun database né cache di stato: un marker `@io:<sequenceName>` nel subject e l'`ioMessageId` autodescrittivo permettono a `getMessage` di ricalcolare lo snapshot corrente.
 
+
